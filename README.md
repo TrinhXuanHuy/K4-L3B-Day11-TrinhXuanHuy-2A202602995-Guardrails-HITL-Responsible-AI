@@ -1,5 +1,9 @@
 # Day 11 — Controlled Agent Security (2026)
 
+- **Họ và tên:** Trịnh Xuân Huy
+- **MSSV:** 2A202602995
+- **Lớp:** K4-L3B
+
 > 👤 **Hình thức:** bài tập **cá nhân** (1 người / 1 MSSV).  
 > 🎯 **Mục tiêu:** xây **Blue** (phòng thủ), rồi red-team **Red** + **Red Advance**.  
 > ✅ Làm theo **Checkpoint 1 → 5** trong [`CHECKPOINTS.md`](CHECKPOINTS.md) · nộp theo [`SUBMISSION.md`](SUBMISSION.md).

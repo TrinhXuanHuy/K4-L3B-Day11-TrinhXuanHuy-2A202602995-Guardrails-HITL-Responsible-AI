@@ -42,6 +42,13 @@ InputStatus = Literal["ALLOW", "BLOCK"]
 # Regex is one signal, not the whole security boundary.
 # ============================================================
 
+import unicodedata
+
+def _strip_accents(text: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).replace("đ", "d").replace("Đ", "D")
+
+
 def detect_injection(user_input: str) -> InputStatus:
     """Detect prompt injection patterns in user input.
 
@@ -51,14 +58,25 @@ def detect_injection(user_input: str) -> InputStatus:
     Returns:
         ``"BLOCK"`` if injection detected (chặn), ``"ALLOW"`` otherwise (cho qua).
     """
+    # Canonicalize / normalize invisible characters and unicode
+    cleaned = re.sub(r"[\u200B-\u200D\uFEFF]", "", user_input)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+
     INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+        r"ignore\s+(all\s+)?(previous|above)\s+instructions",
+        r"you\s+are\s+now\b",
+        r"system\s+prompt\b",
+        r"reveal\s+your\s+(instructions|prompt|system)",
+        r"reveal\s+(the\s+)?(internal\s+)?(password|secret|key|system|instructions|prompt)",
+        r"pretend\s+you\s+are\b",
+        r"act\s+as\s+(a\s+|an\s+)?unrestricted\b",
+        r"bypass\s+(safety|guardrail|filter|policy|restrictions)",
+        r"DAN\s+mode",
+        r"\bjailbreak\b",
     ]
 
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+        if re.search(pattern, cleaned, re.IGNORECASE):
             return "BLOCK"
     return "ALLOW"
 
@@ -85,13 +103,27 @@ def topic_filter(user_input: str) -> InputStatus:
         ``"ALLOW"`` = cho qua (câu banking hợp lệ).
     """
     input_lower = user_input.lower()
+    input_no_accents = _strip_accents(input_lower)
 
-    # TODO: Implement logic:
     # 1. If input contains any blocked topic -> return "BLOCK"
-    # 2. If input doesn't contain any allowed topic -> return "BLOCK"
-    # 3. Otherwise -> return "ALLOW"
+    for topic in BLOCKED_TOPICS:
+        pattern = r"\b" + re.escape(topic) + r"\b"
+        if re.search(pattern, input_lower) or re.search(pattern, input_no_accents):
+            return "BLOCK"
 
-    pass  # Replace with your implementation
+    # 2. If input doesn't contain any allowed topic -> return "BLOCK"
+    has_allowed = False
+    for topic in ALLOWED_TOPICS:
+        topic_clean = topic.lower()
+        topic_no_accents = _strip_accents(topic_clean)
+        if topic_clean in input_lower or topic_no_accents in input_no_accents:
+            has_allowed = True
+            break
+
+    if not has_allowed:
+        return "BLOCK"
+
+    return "ALLOW"
 
 
 # ============================================================
@@ -144,14 +176,19 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 3. If both return "ALLOW": return None (let message through)
+        if detect_injection(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response(
+                "I cannot process that request due to security policies."
+            )
 
-        pass  # Replace with your implementation
+        if topic_filter(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response(
+                "I can only help with banking-related questions for VinBank."
+            )
+
+        return None
 
 
 # ============================================================
